@@ -1,0 +1,126 @@
+<?php
+
+function qrcode_menu() {
+  $menus = array();
+  $menus['qrcode'] = array(
+    'page callback' => 'qrcode_page',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'qrcode.pages.inc'
+  );
+  $menus['admin/config/media/qrcode'] = array(
+    'title' => t('Configure QRCode'),
+    'description' => t('Configure QRCode'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('qrcode_admin_settings'),
+    'access arguments' => array('qrcode settings'),
+    'file' => 'qrcode.admin.inc'
+  );
+  return $menus;
+}
+
+function qrcode_block_info() {
+  $blocks = array();
+  $blocks['qrcode_block'] = array(
+    'info' => t('QRCode Block'),
+    'status' => 1,
+    'region' => 'footer'
+  );
+  return $blocks;
+}
+
+function qrcode_block_view($delta = '') {
+  $block = array();
+  if ($delta === 'qrcode_block') {
+    $block['#attached']['js'][] = drupal_get_path('module', 'qrcode') . '/qrcode.js';
+    $block['content'] = array(
+      '#theme' => 'image',
+      '#path' => url('qrcode', array('query' => array(
+          'chl' => url(current_path(), array('absolute' => TRUE))
+    ))), // drupal_get_path('module', 'qrcode') . '/qrcode.png',
+      '#attached' => array(
+        'js' => array(
+          drupal_get_path('module', 'qrcode') . '/qrcode.js'
+        )
+      )
+    );
+  }
+  return $block;
+}
+
+/**
+ * Implements hook_libraries_info().
+ */
+function qrcode_libraries_info() {
+  return array(
+    'PHPQRCode' => array(
+      'name' => 'PHPQRCode',
+      'vendor url' => 'http://phpqrcode.sourceforge.net/',
+      'download url' => 'https://github.com/aferrandini/PHPQRCode',
+      'version arguments' => array(
+        'file' => 'VERSION',
+        'pattern' => "/([0-9\.]+)/",
+        'lines' => 1,
+      ),
+      'path' => 'lib',
+      'files' => array(
+        'php' => array(
+          'PHPQRCode.php',
+        ),
+      ),
+      'callbacks' => array(
+        'post-load' => array('_qrcode_libraries_register')
+      )
+    ),
+  );
+}
+
+function _qrcode_libraries_register(&$libraries, $version, $variants) {
+  \PHPQRCode\Autoloader::register();
+}
+
+function qrcode_url($chl, $chs = '320x320') {
+  if (variable_get('qrcode_device', 0)) {
+    $url = _qrcode_library_generate($chl, $chs);
+  } else {
+    $url = _qrcode_google_api_generate($chl, $chs);
+  }
+  return $url;
+}
+
+function _qrcode_google_api_generate($chl, $chs) {
+  return 'http://chart.apis.google.com/chart?chs=' . $chs . '&chl=' . rawurlencode($chl) . '&choe=UTF-8&cht=qr';
+}
+
+function _qrcode_library_generate($chl, $chs) {
+  $destination = 'public://qrcode/' . $chs . '/' . md5($chl) . '.png';
+  if (file_exists(drupal_realpath($destination))) {
+    return file_create_url($destination);
+  }
+  $libraries = libraries_load('PHPQRCode');
+  if (empty($libraries) || empty($libraries['loaded'])) {
+    watchdog('php', "ERROR: PHPQRCode library is not found !", array(), WATCHDOG_ERROR);
+  }
+
+  $tmp_file = drupal_realpath('temporary://qrcode-' . $chs . '-' . md5($chl));
+  $file = new stdClass();
+  $file->uri = $tmp_file;
+
+  list($width, $height) = explode('x', $chs, 2);
+  $size = round($width / 40, 0);
+  \PHPQRCode\QRcode::png($chl, $tmp_file, \PHPQRCode\Constants::QR_ECLEVEL_M, $size, 10 - $size);
+
+  file_move($file, $destination, FILE_EXISTS_REPLACE);
+  return file_create_url($destination);
+}
+
+function qrcode_permission() {
+  $perms = array(
+    'qrcode settings' => array(
+      'title' => t('qrcode settings'),
+      'description' => t('qrcode settings'),
+      'restrict access' => TRUE,
+    )
+  );
+  return $perms;
+}

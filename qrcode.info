@@ -1,0 +1,8 @@
+name = QRCode
+description = Page displays QRCode
+package = QRCode
+configure = admin/config/media/qrcode
+
+version = 7.x-1.x-dev
+core = 7.x
+project = qrcode
