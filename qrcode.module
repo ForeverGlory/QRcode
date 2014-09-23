@@ -109,9 +109,13 @@ function _qrcode_library_generate($chl, $chs) {
   list($width, $height) = explode('x', $chs, 2);
   $size = round($width / 40, 0);
   \PHPQRCode\QRcode::png($chl, $tmp_file, \PHPQRCode\Constants::QR_ECLEVEL_M, $size, 10 - $size);
-
-  file_move($file, $destination, FILE_EXISTS_REPLACE);
-  return file_create_url($destination);
+  $dirname = drupal_dirname($destination);
+  $writable = file_prepare_directory($dirname, FILE_CREATE_DIRECTORY);
+  if ($writable) {
+    file_move($file, $destination, FILE_EXISTS_REPLACE);
+    return file_create_url($destination);
+  }
+  return drupal_get_path('module', 'qrcode') . '/qrcode.png';
 }
 
 function qrcode_permission() {
